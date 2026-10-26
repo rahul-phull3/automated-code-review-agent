@@ -1,0 +1,52 @@
+name: Review a repository
+on:
+  workflow_dispatch:
+    inputs:
+      repository_url:
+        description: HTTPS Git URL to review
+        required: true
+        type: string
+      ref:
+        description: Branch, tag or commit
+        default: HEAD
+        type: string
+      provider:
+        description: AI provider
+        required: true
+        type: choice
+        options: [openai, anthropic]
+      model:
+        description: Model ID supporting structured JSON output
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run bounded review
+        env:
+          TARGET_URL: ${{ inputs.repository_url }}
+          TARGET_REF: ${{ inputs.ref }}
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python -m review_agent review "$TARGET_URL" --ref "$TARGET_REF" \
+            --conventions examples/CONVENTIONS.md --provider "$PROVIDER" \
+            --model "$MODEL" --max-calls 60 --output reports
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code-review
+          path: reports/
+          if-no-files-found: warn
